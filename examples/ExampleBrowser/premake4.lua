@@ -3,7 +3,24 @@ project "App_BulletExampleBrowser"
         language "C++"
 
         kind "ConsoleApp"
+        
+        if os.is("Linux") then
+	        buildoptions{"-fPIC"}
+	    	end
 
+				if _OPTIONS["enable_grpc"] then
+					initGRPC()
+					defines{"ENABLE_STATIC_GRPC_PLUGIN"}
+					 files {
+                  "../../examples/SharedMemory/PhysicsClientGRPC.cpp",
+                  "../../examples/SharedMemory/PhysicsClientGRPC.h",
+                  "../../examples/SharedMemory/PhysicsClientGRPC_C_API.cpp",
+                  "../../examples/SharedMemory/PhysicsClientGRPC_C_API.h",
+                  "../../examples/SharedMemory/plugins/grpcPlugin/grpcPlugin.cpp",
+
+                }
+				end
+		        
         hasCL = findOpenCL("clew")
 
         if (hasCL) then
@@ -17,6 +34,7 @@ project "App_BulletExampleBrowser"
         includedirs {
                 ".",
                 "../../src",
+		"../../examples/SharedMemory",
                 "../ThirdPartyLibs",
                 }
 
@@ -71,7 +89,10 @@ project "App_BulletExampleBrowser"
         "main.cpp",
         "ExampleEntries.cpp",
         "../InverseKinematics/*",
-		"../TinyRenderer/geometry.cpp",
+	"../BulletRobotics/FixJointBoxes.cpp",
+	"../BulletRobotics/BoxStack.cpp",
+	"../BulletRobotics/JointLimit.cpp",
+	"../TinyRenderer/geometry.cpp",
 		"../TinyRenderer/model.cpp",
 		"../TinyRenderer/tgaimage.cpp",
 		"../TinyRenderer/our_gl.cpp",
@@ -95,6 +116,15 @@ project "App_BulletExampleBrowser"
 		"../SharedMemory/SharedMemoryCommandProcessor.cpp",
 		"../SharedMemory/SharedMemoryCommandProcessor.h",
 		"../SharedMemory/SharedMemoryInProcessPhysicsC_API.cpp",
+		"../SharedMemory/GraphicsClientExample.cpp",
+		"../SharedMemory/GraphicsClientExample.h",
+		"../SharedMemory/GraphicsServerExample.cpp",
+		"../SharedMemory/GraphicsServerExample.h",
+		"../SharedMemory/GraphicsSharedMemoryBlock.h",
+		"../SharedMemory/GraphicsSharedMemoryCommands.h",
+		"../SharedMemory/GraphicsSharedMemoryPublic.h",
+		"../SharedMemory/RemoteGUIHelper.cpp",
+		"../SharedMemory/RemoteGUIHelper.h",
 		"../SharedMemory/PhysicsClient.cpp",
 		"../SharedMemory/PosixSharedMemory.cpp",
 		"../SharedMemory/Win32SharedMemory.cpp",
@@ -110,10 +140,17 @@ project "App_BulletExampleBrowser"
 		"../SharedMemory/PhysicsServerCommandProcessor.cpp",
 		"../SharedMemory/PhysicsServerCommandProcessor.h",
 		"../SharedMemory/b3PluginManager.cpp",		
-		"../SharedMemory/TinyRendererVisualShapeConverter.cpp",
-		"../SharedMemory/TinyRendererVisualShapeConverter.h",
+		"../SharedMemory/plugins/collisionFilterPlugin/collisionFilterPlugin.cpp",
+		"../SharedMemory/plugins/tinyRendererPlugin/TinyRendererVisualShapeConverter.cpp",
+		"../SharedMemory/plugins/tinyRendererPlugin/tinyRendererPlugin.cpp",
+		"../SharedMemory/plugins/pdControlPlugin/pdControlPlugin.cpp",
+		"../SharedMemory/plugins/pdControlPlugin/pdControlPlugin.h",
 		"../SharedMemory/SharedMemoryCommands.h",
 		"../SharedMemory/SharedMemoryPublic.h",
+		"../SharedMemory/b3RobotSimulatorClientAPI_NoGUI.cpp",
+		"../SharedMemory/b3RobotSimulatorClientAPI_NoGUI.h",		
+		"../SharedMemory/b3RobotSimulatorClientAPI_NoDirect.cpp",
+		"../SharedMemory/b3RobotSimulatorClientAPI_NoDirect.h",		
 		"../MultiThreading/MultiThreadingExample.cpp",
 		"../MultiThreading/b3PosixThreadSupport.cpp",
 		"../MultiThreading/b3Win32ThreadSupport.cpp",
@@ -131,9 +168,11 @@ project "App_BulletExampleBrowser"
 		"../Evolution/NN3DWalkers.h",
 		"../Collision/*",
 		"../RoboticsLearning/*",
+		"../BlockSolver/*",
 		"../Collision/Internal/*",
 		"../Benchmarks/*",
 		"../MultiThreadedDemo/*",
+		"../Heightfield/HeightfieldExample.*",
 		"../CommonInterfaces/*.h",
 		"../ForkLift/ForkLiftDemo.*",
 		"../Importers/**",
@@ -143,30 +182,50 @@ project "App_BulletExampleBrowser"
 		"../RenderingExamples/*",
 		"../VoronoiFracture/*",
 		"../SoftDemo/*",
+		"../DeformableDemo/*",
 		"../RollingFrictionDemo/*",
+		"../rbdl/*",
 		"../FractureDemo/*",
 		"../DynamicControlDemo/*",
 		"../Constraints/*",
 		"../Vehicles/*",
 		"../Raycast/*",
 		"../MultiBody/MultiDofDemo.cpp",
+		"../MultiBody/SerialChains.cpp",
 		"../MultiBody/TestJointTorqueSetup.cpp",
 		"../MultiBody/Pendulum.cpp",
 		"../MultiBody/MultiBodySoftContact.cpp",
 		"../MultiBody/MultiBodyConstraintFeedback.cpp",
 		"../MultiBody/InvertedPendulumPDControl.cpp",
 		"../RigidBody/RigidBodySoftContact.cpp",
-		"../ThirdPartyLibs/stb_image/*",
+		"../ThirdPartyLibs/stb_image/stb_image.cpp",
 		"../ThirdPartyLibs/Wavefront/tiny_obj_loader.*",
-		"../ThirdPartyLibs/tinyxml/*",
 		"../ThirdPartyLibs/BussIK/*",
 		"../GyroscopicDemo/GyroscopicSetup.cpp",
 		"../GyroscopicDemo/GyroscopicSetup.h",
-        "../ThirdPartyLibs/tinyxml/tinystr.cpp",
-        "../ThirdPartyLibs/tinyxml/tinyxml.cpp",
-        "../ThirdPartyLibs/tinyxml/tinyxmlerror.cpp",
-        "../ThirdPartyLibs/tinyxml/tinyxmlparser.cpp",
+    "../ThirdPartyLibs/tinyxml2/tinyxml2.cpp",
+    "../ThirdPartyLibs/tinyxml2/tinyxml2.h",
         }
+        
+  if _OPTIONS["enable_stable_pd"] then
+		defines {"STATIC_LINK_SPD_PLUGIN"}
+		files {
+			"../SharedMemory/plugins/stablePDPlugin/SpAlg.cpp",
+			"../SharedMemory/plugins/stablePDPlugin/SpAlg.h",
+			"../SharedMemory/plugins/stablePDPlugin/Shape.cpp",
+			"../SharedMemory/plugins/stablePDPlugin/Shape.h",
+			"../SharedMemory/plugins/stablePDPlugin/RBDUtil.cpp",
+			"../SharedMemory/plugins/stablePDPlugin/RBDUtil.h",
+			"../SharedMemory/plugins/stablePDPlugin/RBDModel.cpp",
+			"../SharedMemory/plugins/stablePDPlugin/RBDModel.h",
+			"../SharedMemory/plugins/stablePDPlugin/MathUtil.cpp",
+			"../SharedMemory/plugins/stablePDPlugin/MathUtil.h",
+			"../SharedMemory/plugins/stablePDPlugin/KinTree.cpp",
+			"../SharedMemory/plugins/stablePDPlugin/KinTree.h",
+			"../SharedMemory/plugins/stablePDPlugin/BulletConversion.cpp",
+			"../SharedMemory/plugins/stablePDPlugin/BulletConversion.h",
+			}
+		end
 if (hasCL and findOpenGL3()) then
 			files {
 				"../OpenCL/broadphase/*",
@@ -175,6 +234,11 @@ if (hasCL and findOpenGL3()) then
 				"../OpenCL/rigidbody/GpuRigidBodyDemo.cpp",
 			}
 		end
+		
+if (_OPTIONS["enable_static_vr_plugin"]) then
+		files {"../../examples/SharedMemory/plugins/vrSyncPlugin/vrSyncPlugin.cpp"}
+end
+
 if os.is("Linux") then
         initX11()
 end
@@ -202,6 +266,10 @@ project "BulletExampleBrowserLib"
                 "../../src",
                 "../ThirdPartyLibs",
                 }
+                
+        if os.is("Linux") then
+            buildoptions{"-fPIC"}
+        end
 
 	if _OPTIONS["lua"] then
 		includedirs{"../ThirdPartyLibs/lua-5.2.3/src"}

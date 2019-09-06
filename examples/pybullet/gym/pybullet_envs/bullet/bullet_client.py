@@ -6,11 +6,12 @@ import pybullet
 class BulletClient(object):
   """A wrapper for pybullet to manage different clients."""
 
-  def __init__(self, connection_mode=pybullet.DIRECT):
+  def __init__(self, connection_mode=pybullet.DIRECT, options=""):
     """Create a simulation and connect to it."""
     self._client = pybullet.connect(pybullet.SHARED_MEMORY)
-    if(self._client<0):
-      self._client = pybullet.connect(connection_mode)
+    if (self._client < 0):
+      print("options=", options)
+      self._client = pybullet.connect(connection_mode, options=options)
     self._shapes = {}
 
   def __del__(self):
@@ -24,5 +25,5 @@ class BulletClient(object):
     """Inject the client id into Bullet functions."""
     attribute = getattr(pybullet, name)
     if inspect.isbuiltin(attribute):
-        attribute = functools.partial(attribute, physicsClientId=self._client)
+      attribute = functools.partial(attribute, physicsClientId=self._client)
     return attribute

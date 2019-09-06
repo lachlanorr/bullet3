@@ -170,17 +170,19 @@ void dumpInfo(void)
         if (m_resizeCallback)
         {
             (*m_resizeCallback)(width,height);
-        }
-    #ifndef NO_OPENGL3 
-		NSRect backingBounds = [self convertRectToBacking:[self bounds]];
-        GLsizei backingPixelWidth  = (GLsizei)(backingBounds.size.width),
-        backingPixelHeight = (GLsizei)(backingBounds.size.height);
-        
-        // Set viewport
-        glViewport(0, 0, backingPixelWidth, backingPixelHeight);
-	#else	
-       glViewport(0,0,(GLsizei)width,(GLsizei)height);
+    
+#ifndef NO_OPENGL3
+            NSRect backingBounds = [self convertRectToBacking:[self bounds]];
+            GLsizei backingPixelWidth  = (GLsizei)(backingBounds.size.width),
+            backingPixelHeight = (GLsizei)(backingBounds.size.height);
+            
+            // Set viewport
+            glViewport(0, 0, backingPixelWidth, backingPixelHeight);
+#else
+            glViewport(0,0,(GLsizei)width,(GLsizei)height);
 #endif
+        }
+ 
 	}
 	
 	[m_context setView: self];
@@ -236,7 +238,7 @@ void dumpInfo(void)
 	[fmt release];
 	[m_context makeCurrentContext];
     
-	checkError("makeCurrentContext");
+	//checkError("makeCurrentContext");
 }
 
 -(void) MakeCurrent
@@ -400,9 +402,13 @@ int Mac_createWindow(struct MacOpenGLWindowInternalData* m_internalData,struct M
     ///ci.m_resizeCallback];
     
     [m_internalData->m_myview initWithFrame: frame];
-    
+   
+ 
+ 
     // OpenGL init!
     [m_internalData->m_myview MakeContext : ci->m_openglVersion];
+	
+    [m_internalData->m_myview drawRect: frame];
     
     // https://developer.apple.com/library/mac/#documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/CapturingScreenContents/CapturingScreenContents.html#//apple_ref/doc/uid/TP40012302-CH10-SW1
     //support HighResolutionOSX for Retina Macbook
@@ -420,7 +426,7 @@ int Mac_createWindow(struct MacOpenGLWindowInternalData* m_internalData,struct M
     
     //  float newBackingScaleFactor = [m_internalData->m_window backingScaleFactor];
     
-    dumpInfo();
+    //dumpInfo();
     
     
     
@@ -478,6 +484,11 @@ int Mac_createWindow(struct MacOpenGLWindowInternalData* m_internalData,struct M
 
     [m_internalData->m_myApp finishLaunching];
     [pool release];
+    
+    if(!gladLoaderLoadGL()) {
+        printf("gladLoaderLoadGL failed!\n");
+        exit(-1);
+    }
     
     return 0;
 }
