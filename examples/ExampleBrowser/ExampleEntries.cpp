@@ -1,8 +1,5 @@
 #include "ExampleEntries.h"
 
-#include "../BlockSolver/btBlockSolver.h"
-#include "../BlockSolver/BlockSolverExample.h"
-#include "../BlockSolver/RigidBodyBoxes.h"
 #include "LinearMath/btAlignedObjectArray.h"
 #include "EmptyExample.h"
 #include "../Heightfield/HeightfieldExample.h"
@@ -36,8 +33,10 @@
 #include "../MultiBody/MultiBodyConstraintFeedback.h"
 #include "../MultiBody/MultiDofDemo.h"
 #include "../MultiBody/InvertedPendulumPDControl.h"
+#include "../MultiBody/KinematicMultiBodyExample.h"
 
 #include "../RigidBody/RigidBodySoftContact.h"
+#include "../RigidBody/KinematicRigidBodyExample.h"
 #include "../VoronoiFracture/VoronoiFractureDemo.h"
 #include "../SoftDemo/SoftDemo.h"
 #include "../Constraints/ConstraintDemo.h"
@@ -48,10 +47,19 @@
 #include "../DynamicControlDemo/MotorDemo.h"
 #include "../RollingFrictionDemo/RollingFrictionDemo.h"
 #include "../DeformableDemo/DeformableRigid.h"
+#include "../DeformableDemo/SplitImpulse.h"
+#include "../DeformableDemo/ClothFriction.h"
 #include "../DeformableDemo/Pinch.h"
+#include "../DeformableDemo/DeformableSelfCollision.h"
+#include "../DeformableDemo/PinchFriction.h"
 #include "../DeformableDemo/DeformableMultibody.h"
 #include "../DeformableDemo/VolumetricDeformable.h"
+#include "../DeformableDemo/LargeDeformation.h"
+#include "../DeformableDemo/Collide.h"
 #include "../DeformableDemo/GraspDeformable.h"
+#include "../DeformableDemo/DeformableContact.h"
+#include "../DeformableDemo/DeformableClothAnchor.h"
+#include "../DeformableDemo/MultibodyClothAnchor.h"
 #include "../SharedMemory/PhysicsServerExampleBullet2.h"
 #include "../SharedMemory/PhysicsServerExample.h"
 #include "../SharedMemory/PhysicsClientExample.h"
@@ -139,6 +147,7 @@ static ExampleEntry gDefaultExamples[] =
 		ExampleEntry(1, "Gyroscopic", "Show the Dzhanibekov effect using various settings of the gyroscopic term. You can select the gyroscopic term computation using btRigidBody::setFlags, with arguments BT_ENABLE_GYROSCOPIC_FORCE_EXPLICIT (using explicit integration, which adds energy and can lead to explosions), BT_ENABLE_GYROSCOPIC_FORCE_IMPLICIT_WORLD, BT_ENABLE_GYROSCOPIC_FORCE_IMPLICIT_BODY. If you don't set any of these flags, there is no gyroscopic term used.", GyroscopicCreateFunc),
 
 		ExampleEntry(1, "Soft Contact", "Using the error correction parameter (ERP) and constraint force mixing (CFM) values for contacts to simulate compliant contact.", RigidBodySoftContactCreateFunc),
+    ExampleEntry(1, "Kinematic Body", "Let the user set the transform, the physics engine computes the velocity for one-way contact and friction interaction.", KinematicRigidBodyExampleCreateFunc),
 
 		ExampleEntry(0, "MultiBody"),
 		ExampleEntry(1, "MultiDof", "Create a basic btMultiBody with 3-DOF spherical joints (mobilizers). The demo uses a fixed base or a floating base at restart.", MultiDofCreateFunc),
@@ -148,6 +157,7 @@ static ExampleEntry gDefaultExamples[] =
 		ExampleEntry(1, "Constraint Feedback", "The example shows how to receive joint reaction forces in a btMultiBody. Also the applied impulse is available for a btMultiBodyJointMotor", MultiBodyConstraintFeedbackCreateFunc),
 		ExampleEntry(1, "Inverted Pendulum PD", "Keep an inverted pendulum up using open loop PD control", InvertedPendulumPDControlCreateFunc),
 		ExampleEntry(1, "MultiBody Soft Contact", "Using the error correction parameter (ERP) and constraint force mixing (CFM) values for contacts to simulate compliant contact.", MultiBodySoftContactCreateFunc, 0),
+    ExampleEntry(1, "Kinematic MultiBody", "Let the user set the transform, the physics engine computes the velocity for one-way contact and friction interaction.", KinematicMultiBodyExampleCreateFunc),
 
 		ExampleEntry(0, "Physics Client-Server"),
 		ExampleEntry(1, "Physics Server", "Create a physics server that communicates with a physics client over shared memory. You can connect to the server using pybullet, a PhysicsClient or a UDP/TCP Bridge.",
@@ -164,13 +174,6 @@ static ExampleEntry gDefaultExamples[] =
 					 //
 		//	ExampleEntry(1, "Physics Client (Direct)", "Create a physics client that can communicate with a physics server directly in-process.", PhysicsClientCreateFunc,eCLIENTEXAMPLE_DIRECT),
 
-		ExampleEntry(0, "BlockSolver"),
-		ExampleEntry(1, "Stack MultiBody SI", "Create a stack of blocks, with heavy block at the top", BlockSolverExampleCreateFunc, BLOCK_SOLVER_SCENE_MB_STACK + BLOCK_SOLVER_SI),
-		ExampleEntry(1, "Stack MultiBody MLCP PGS", "Create a stack of blocks, with heavy block at the top", BlockSolverExampleCreateFunc, BLOCK_SOLVER_SCENE_MB_STACK + BLOCK_SOLVER_MLCP_PGS),
-		ExampleEntry(1, "Stack MultiBody MLCP Dantzig", "Create a stack of blocks, with heavy block at the top", BlockSolverExampleCreateFunc, BLOCK_SOLVER_SCENE_MB_STACK + BLOCK_SOLVER_MLCP_DANTZIG),
-		ExampleEntry(1, "Stack MultiBody Block", "Create a stack of blocks, with heavy block at the top", BlockSolverExampleCreateFunc, BLOCK_SOLVER_SCENE_MB_STACK + BLOCK_SOLVER_BLOCK),
-		//ExampleEntry(1, "Stack RigidBody SI", "Create a stack of blocks, with heavy block at the top", RigidBodyBoxesCreateFunc, BLOCK_SOLVER_SI),
-		//ExampleEntry(1, "Stack RigidBody Block", "Create a stack of blocks, with heavy block at the top", RigidBodyBoxesCreateFunc, BLOCK_SOLVER_BLOCK),
 
 		ExampleEntry(0, "Inverse Dynamics"),
 		ExampleEntry(1, "Inverse Dynamics URDF", "Create a btMultiBody from URDF. Create an inverse MultiBodyTree model from that. Use either decoupled PD control or computed torque control using the inverse model to track joint position targets", InverseDynamicsExampleCreateFunc, BT_ID_LOAD_URDF),
@@ -196,10 +199,19 @@ static ExampleEntry gDefaultExamples[] =
 //ExampleEntry(1, "Spheres & Plane C-API (Bullet3)", "Collision C-API using Bullet 3.x backend", CollisionTutorialBullet2CreateFunc,TUT_SPHERE_PLANE_RTB3),
 
         ExampleEntry(0, "Deformabe Body"),
+        ExampleEntry(1, "Deformable Self Collision", "Deformable Self Collision", DeformableSelfCollisionCreateFunc),
+        ExampleEntry(1, "Deformable-Deformable Contact", "Deformable contact", DeformableContactCreateFunc),
+        ExampleEntry(1, "Cloth Friction", "Cloth friction contact", ClothFrictionCreateFunc),
+        ExampleEntry(1, "Deformable-Deformable Friction Contact", "Deformable friction contact", PinchFrictionCreateFunc),
         ExampleEntry(1, "Deformable-RigidBody Contact", "Deformable test", DeformableRigidCreateFunc),
+        ExampleEntry(1, "Split Impulse Contact", "Split impulse test", SplitImpulseCreateFunc),
         ExampleEntry(1, "Grasp Deformable Cube", "Grasping test", PinchCreateFunc),
         ExampleEntry(1, "Grasp Deformable with Motor", "Grasping test", GraspDeformableCreateFunc),
         ExampleEntry(1, "Volumetric Deformable Objects", "Volumetric Deformable test", VolumetricDeformableCreateFunc),
+		ExampleEntry(1, "Extreme Deformation", "Recovery from extreme deformation", LargeDeformationCreateFunc),
+		ExampleEntry(1, "Colliding Test", "Volumetric deformable collide with rigid box", CollideCreateFunc),
+        ExampleEntry(1, "Rigid Cloth Anchor", "Deformable Rigid body Anchor test", DeformableClothAnchorCreateFunc),
+        ExampleEntry(1, "Multibody Cloth Anchor", "Deformable Multibody Anchor test", MultibodyClothAnchorCreateFunc),
         ExampleEntry(1, "Deformable-MultiBody Contact", "MultiBody and Deformable contact", DeformableMultibodyCreateFunc),
         // ExampleEntry(1, "MultiBody Baseline", "MultiBody Baseline", MultiBodyBaselineCreateFunc),
         
@@ -299,6 +311,7 @@ static ExampleEntry gDefaultExamples[] =
 		ExampleEntry(1, "Rolling friction", "Experiment on multibody rolling friction", R2D2GraspExampleCreateFunc, eROBOTIC_LEARN_ROLLING_FRICTION),
 		ExampleEntry(1, "Gripper Grasp", "Grasp experiment with a gripper to improve contact model", GripperGraspExampleCreateFunc, eGRIPPER_GRASP),
 		ExampleEntry(1, "Two Point Grasp", "Grasp experiment with two point contact to test rolling friction", GripperGraspExampleCreateFunc, eTWO_POINT_GRASP),
+		ExampleEntry(1, "Grasp Deformable Cloth", "Grasp experiment with deformable cloth", GripperGraspExampleCreateFunc, eGRASP_DEFORMABLE_CLOTH),
 		ExampleEntry(1, "One Motor Gripper Grasp", "Grasp experiment with a gripper with one motor to test slider constraint for closed loop structure", GripperGraspExampleCreateFunc, eONE_MOTOR_GRASP),
 #ifndef SKIP_SOFT_BODY_MULTI_BODY_DYNAMICS_WORLD
 		ExampleEntry(1, "Grasp Soft Body", "Grasp soft body experiment", GripperGraspExampleCreateFunc, eGRASP_SOFT_BODY),

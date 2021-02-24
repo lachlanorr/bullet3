@@ -6,6 +6,9 @@
 #include <iostream>
 #include <sstream>
 #include "Bullet3Common/b3Logging.h"
+
+namespace TinyRender
+{
 Model::Model(const char *filename) : verts_(), faces_(), norms_(), uv_(), diffusemap_(), normalmap_(), specularmap_()
 {
 	std::ifstream in;
@@ -126,9 +129,12 @@ int Model::nfaces()
 std::vector<int> Model::face(int idx)
 {
 	std::vector<int> face;
-	for (int i = 0; i < (int)faces_[idx].size(); i++) face.push_back(faces_[idx][i][0]);
-	return face;
+        face.reserve((int)faces_[idx].size());
+        for (int i = 0; i < (int)faces_[idx].size(); i++)
+          face.push_back(faces_[idx][i][0]);
+        return face;
 }
+
 
 Vec3f Model::vert(int i)
 {
@@ -160,14 +166,23 @@ TGAColor Model::diffuse(Vec2f uvf)
 		//		bool repeat = true;
 		//		if (repeat)
 		{
-                  uvf[0] = std::modf(uvf[0], &val);
-                  uvf[1] = std::modf(uvf[1], &val);
-                }
-                Vec2i uv(uvf[0] * diffusemap_.get_width(), uvf[1] * diffusemap_.get_height());
+			uvf[0] = std::modf(uvf[0], &val);
+			if (uvf[0] < 0) 
+			{
+				uvf[0] = uvf[0] + 1;
+			}
+			uvf[1] = std::modf(uvf[1], &val);
+			if (uvf[1] < 0) 
+			{
+				uvf[1] = uvf[1] + 1;
+			}
+		}
+        	Vec2i uv(uvf[0] * diffusemap_.get_width(), uvf[1] * diffusemap_.get_height());
 		return diffusemap_.get(uv[0], uv[1]);
 	}
 	return TGAColor(255, 255, 255, 255);
 }
+	
 
 Vec3f Model::normal(Vec2f uvf)
 {
@@ -198,4 +213,5 @@ Vec3f Model::normal(int iface, int nthvert)
 {
 	int idx = faces_[iface][nthvert][2];
 	return norms_[idx].normalize();
+}
 }

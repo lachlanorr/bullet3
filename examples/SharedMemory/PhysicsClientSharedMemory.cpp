@@ -69,6 +69,9 @@ struct PhysicsClientSharedMemoryInternalData
 	btHashMap<btHashInt, SharedMemoryUserData> m_userDataMap;
 	btHashMap<SharedMemoryUserDataHashKey, int> m_userDataHandleLookup;
 
+	btAlignedObjectArray<char> m_cachedReturnData;
+	b3UserDataValue m_cachedReturnDataValue;
+
 	SharedMemoryStatus m_tempBackupServerStatus;
 
 	SharedMemoryStatus m_lastServerStatus;
@@ -243,7 +246,7 @@ PhysicsClientSharedMemory::PhysicsClientSharedMemory()
 
 PhysicsClientSharedMemory::~PhysicsClientSharedMemory()
 {
-	if (m_data->m_isConnected)
+if (m_data->m_isConnected)
 	{
 		disconnectSharedMemory();
 	}
@@ -1350,8 +1353,22 @@ const SharedMemoryStatus* PhysicsClientSharedMemory::processServerStatus()
 				b3Warning("Request getCollisionInfo failed");
 				break;
 			}
+			
 			case CMD_CUSTOM_COMMAND_COMPLETED:
 			{
+
+				m_data->m_cachedReturnData.resize(serverCmd.m_customCommandResultArgs.m_returnDataSizeInBytes);
+				m_data->m_cachedReturnDataValue.m_length = serverCmd.m_customCommandResultArgs.m_returnDataSizeInBytes;
+
+				if (serverCmd.m_customCommandResultArgs.m_returnDataSizeInBytes)
+				{
+					m_data->m_cachedReturnDataValue.m_type = serverCmd.m_customCommandResultArgs.m_returnDataType;
+					m_data->m_cachedReturnDataValue.m_data1 = &m_data->m_cachedReturnData[0];
+					for (int i = 0; i < serverCmd.m_numDataStreamBytes; i++)
+					{
+						m_data->m_cachedReturnData[i + serverCmd.m_customCommandResultArgs.m_returnDataStart] = m_data->m_testBlock1->m_bulletStreamDataServerToClientRefactor[i];
+					}
+				}
 				break;
 			}
 			case CMD_CALCULATED_JACOBIAN_COMPLETED:
@@ -1458,7 +1475,7 @@ const SharedMemoryStatus* PhysicsClientSharedMemory::processServerStatus()
                                BodyJointInfoCache* bodyJoints = new BodyJointInfoCache;
                                m_data->m_bodyJointMap.insert(bodyUniqueId, bodyJoints);
                                bodyJoints->m_bodyName = serverCmd.m_dataStreamArguments.m_bodyName;
-                               bodyJoints->m_baseName = "baseLink";
+                               bodyJoints->m_baseName = serverCmd.m_dataStreamArguments.m_bodyName;
                                         
                                if (bf.ok())
                                {
@@ -1529,19 +1546,45 @@ const SharedMemoryStatus* PhysicsClientSharedMemory::processServerStatus()
 		{
 			B3_PROFILE("CMD_LOADING_COMPLETED");
 			int numConstraints = serverCmd.m_sdfLoadedArgs.m_numUserConstraints;
-			for (int i = 0; i < numConstraints; i++)
-			{
-				int constraintUid = serverCmd.m_sdfLoadedArgs.m_userConstraintUniqueIds[i];
-				m_data->m_constraintIdsRequestInfo.push_back(constraintUid);
-			}
 			int numBodies = serverCmd.m_sdfLoadedArgs.m_numBodies;
+			if (serverCmd.m_type == CMD_SYNC_BODY_INFO_COMPLETED)
+			{
+				int* ids = (int*)m_data->m_testBlock1->m_bulletStreamDataServerToClientRefactor;
+				int* constraintUids = ids + numBodies;
+				for (int i = 0; i < numConstraints; i++)
+				{
+					int constraintUid = constraintUids[i];
+					m_data->m_constraintIdsRequestInfo.push_back(constraintUid);
+				}
+			}
+			else
+			{
+				for (int i = 0; i < numConstraints; i++)
+				{
+					int constraintUid = serverCmd.m_sdfLoadedArgs.m_userConstraintUniqueIds[i];
+					m_data->m_constraintIdsRequestInfo.push_back(constraintUid);
+				}
+			}
+			
 			if (numBodies > 0)
 			{
 				m_data->m_tempBackupServerStatus = m_data->m_lastServerStatus;
 
-				for (int i = 0; i < numBodies; i++)
+				if (serverCmd.m_type == CMD_SYNC_BODY_INFO_COMPLETED)
 				{
-					m_data->m_bodyIdsRequestInfo.push_back(serverCmd.m_sdfLoadedArgs.m_bodyUniqueIds[i]);
+					int* bodyIds = (int*)m_data->m_testBlock1->m_bulletStreamDataServerToClientRefactor;
+
+					for (int i = 0; i < numBodies; i++)
+					{
+						m_data->m_bodyIdsRequestInfo.push_back(bodyIds[i]);
+					}
+				}
+				else
+				{
+					for (int i = 0; i < numBodies; i++)
+					{
+						m_data->m_bodyIdsRequestInfo.push_back(serverCmd.m_sdfLoadedArgs.m_bodyUniqueIds[i]);
+					}
 				}
 
 				int bodyId = m_data->m_bodyIdsRequestInfo[m_data->m_bodyIdsRequestInfo.size() - 1];
@@ -1559,17 +1602,19 @@ const SharedMemoryStatus* PhysicsClientSharedMemory::processServerStatus()
 		if (serverCmd.m_type == CMD_SYNC_USER_DATA_COMPLETED)
 		{
 			B3_PROFILE("CMD_SYNC_USER_DATA_COMPLETED");
-			// Remove all cached user data entries.
-			for (int i = 0; i < m_data->m_bodyJointMap.size(); i++)
-			{
-				BodyJointInfoCache** bodyJointsPtr = m_data->m_bodyJointMap.getAtIndex(i);
-				if (bodyJointsPtr && *bodyJointsPtr)
+			if (serverCmd.m_syncUserDataArgs.m_clearCachedUserDataEntries) {
+				// Remove all cached user data entries.
+				for (int i = 0; i < m_data->m_bodyJointMap.size(); i++)
 				{
-					(*bodyJointsPtr)->m_userDataIds.clear();
+					BodyJointInfoCache** bodyJointsPtr = m_data->m_bodyJointMap.getAtIndex(i);
+					if (bodyJointsPtr && *bodyJointsPtr)
+					{
+						(*bodyJointsPtr)->m_userDataIds.clear();
+					}
 				}
+				m_data->m_userDataMap.clear();
+				m_data->m_userDataHandleLookup.clear();
 			}
-			m_data->m_userDataMap.clear();
-			m_data->m_userDataHandleLookup.clear();
 			const int numIdentifiers = serverCmd.m_syncUserDataArgs.m_numUserDataIdentifiers;
 			if (numIdentifiers > 0)
 			{
@@ -1636,6 +1681,7 @@ const SharedMemoryStatus* PhysicsClientSharedMemory::processServerStatus()
 			m_data->m_lastServerStatus = m_data->m_tempBackupServerStatus;
 		}
 
+		
 		if (serverCmd.m_type == CMD_REMOVE_USER_DATA_COMPLETED)
 		{
 			B3_PROFILE("CMD_REMOVE_USER_DATA_COMPLETED");
@@ -1823,6 +1869,23 @@ const SharedMemoryStatus* PhysicsClientSharedMemory::processServerStatus()
 			return 0;
 		}
 
+		if (serverCmd.m_type == CMD_CUSTOM_COMMAND_COMPLETED)
+		{
+			int totalReceived = (serverCmd.m_numDataStreamBytes + serverCmd.m_customCommandResultArgs.m_returnDataStart);
+			int remaining = serverCmd.m_customCommandResultArgs.m_returnDataSizeInBytes - totalReceived;
+			
+			if (remaining > 0)
+			{
+				// continue requesting return data
+				SharedMemoryCommand& command = m_data->m_testBlock1->m_clientCommands[0];
+				command.m_type = CMD_CUSTOM_COMMAND;
+				command.m_customCommandArgs.m_startingReturnBytes =
+					totalReceived;
+				submitClientCommand(command);
+				return 0;
+			}
+		}
+
 		return &m_data->m_lastServerStatus;
 	}
 	else
@@ -1978,6 +2041,16 @@ void PhysicsClientSharedMemory::getCachedMassMatrix(int dofCountCheck, double* m
 	}
 }
 
+bool PhysicsClientSharedMemory::getCachedReturnData(b3UserDataValue* returnData)
+{
+	if (m_data->m_cachedReturnDataValue.m_length)
+	{
+		*returnData = m_data->m_cachedReturnDataValue;
+		return true;
+	}
+	return false;
+
+}
 void PhysicsClientSharedMemory::getCachedVisualShapeInformation(struct b3VisualShapeInformation* visualShapesInfo)
 {
 	visualShapesInfo->m_numVisualShapes = m_data->m_cachedVisualShapes.size();

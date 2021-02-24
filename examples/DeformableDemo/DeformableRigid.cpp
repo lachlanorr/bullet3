@@ -10,21 +10,6 @@
  2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
  3. This notice may not be removed or altered from any source distribution.
  */
-
-///create 125 (5x5x5) dynamic object
-#define ARRAY_SIZE_X 5
-#define ARRAY_SIZE_Y 5
-#define ARRAY_SIZE_Z 5
-
-//maximum number of objects (and allow user to shoot additional boxes)
-#define MAX_PROXIES (ARRAY_SIZE_X * ARRAY_SIZE_Y * ARRAY_SIZE_Z + 1024)
-
-///scaling of the objects (0.1 = 20 centimeter boxes )
-#define SCALING 1.
-#define START_POS_X -5
-#define START_POS_Y -5
-#define START_POS_Z -3
-
 #include "DeformableRigid.h"
 ///btBulletDynamicsCommon.h is the main Bullet include file, contains most common include files.
 #include "btBulletDynamicsCommon.h"
@@ -36,18 +21,15 @@
 #include "BulletDynamics/Featherstone/btMultiBodyConstraintSolver.h"
 #include <stdio.h>  //printf debugging
 
-#include "../CommonInterfaces/CommonRigidBodyBase.h"
+#include "../CommonInterfaces/CommonDeformableBodyBase.h"
 #include "../Utils/b3ResourcePath.h"
 
-///The DeformableRigid shows the use of rolling friction.
-///Spheres will come to a rest on a sloped plane using a constraint. Damping cannot achieve the same.
-///Generally it is best to leave the rolling friction coefficient zero (or close to zero).
-class DeformableRigid : public CommonRigidBodyBase
+///The DeformableRigid shows contact between deformable objects and rigid objects.
+class DeformableRigid : public CommonDeformableBodyBase
 {
-    btAlignedObjectArray<btDeformableLagrangianForce*> forces;
 public:
 	DeformableRigid(struct GUIHelperInterface* helper)
-		: CommonRigidBodyBase(helper)
+    :CommonDeformableBodyBase(helper)
 	{
 	}
 	virtual ~DeformableRigid()
@@ -71,11 +53,53 @@ public:
         //use a smaller internal timestep, there are stability issues
         float internalTimeStep = 1. / 240.f;
         m_dynamicsWorld->stepSimulation(deltaTime, 4, internalTimeStep);
+        
+//
+//        btCollisionShape* boxShape = new btBoxShape(btVector3(1, 1, 1));
+//        boxShape->setMargin(1e-3);
+//        if (0)
+//        {
+//        btVector3 p(0.99,1.01,0.99);
+//        for (int i = 0; i < 40; ++i)
+//        {
+//            p[1] -= 0.001;
+//            btScalar margin(.000001);
+//            btTransform trans;
+//            trans.setIdentity();
+//            btGjkEpaSolver2::sResults results;
+//            const btConvexShape* csh = static_cast<const btConvexShape*>(boxShape);
+//            btScalar d = btGjkEpaSolver2::SignedDistance(p, margin, csh, trans, results);
+//            printf("d = %f\n", d);
+//            printf("----\n");
+//        }
+//        }
+//
+//        btVector3 p(.991,1.01,.99);
+//        for (int i = 0; i < 40; ++i)
+//        {
+//            p[1] -= 0.001;
+//            btScalar margin(.006);
+//            btTransform trans;
+//            trans.setIdentity();
+//            btScalar dst;
+//            btGjkEpaSolver2::sResults results;
+//            btTransform point_transform;
+//            point_transform.setIdentity();
+//            point_transform.setOrigin(p);
+//            btSphereShape sphere(margin);
+//            btVector3 guess(0,0,0);
+//            const btConvexShape* csh = static_cast<const btConvexShape*>(boxShape);
+//            btGjkEpaSolver2::SignedDistance(&sphere, point_transform, csh, trans, guess, results);
+//            dst = results.distance-csh->getMargin();
+//            dst -= margin;
+//            printf("d = %f\n", dst);
+//             printf("----\n");
+//        }
     }
     
     void Ctor_RbUpStack(int count)
     {
-        float mass = 0.2;
+        float mass = .2;
         
         btCompoundShape* cylinderCompound = new btCompoundShape;
         btCollisionShape* cylinderShape = new btCylinderShapeX(btVector3(2, .5, .5));
@@ -90,8 +114,8 @@ public:
         
         btCollisionShape* shape[] = {
             new btBoxShape(btVector3(1, 1, 1)),
-//            new btSphereShape(0.75),
-//            cylinderCompound
+            new btSphereShape(0.75),
+            cylinderCompound
         };
 //        static const int nshapes = sizeof(shape) / sizeof(shape[0]);
 //        for (int i = 0; i < count; ++i)
@@ -132,7 +156,7 @@ public:
     
     virtual void renderScene()
     {
-        CommonRigidBodyBase::renderScene();
+        CommonDeformableBodyBase::renderScene();
         btDeformableMultiBodyDynamicsWorld* deformableWorld = getDeformableDynamicsWorld();
         
         for (int i = 0; i < deformableWorld->getSoftBodyArray().size(); i++)
@@ -141,7 +165,7 @@ public:
             //if (softWorld->getDebugDrawer() && !(softWorld->getDebugDrawer()->getDebugMode() & (btIDebugDraw::DBG_DrawWireframe)))
             {
                 btSoftBodyHelpers::DrawFrame(psb, deformableWorld->getDebugDrawer());
-                btSoftBodyHelpers::Draw(psb, deformableWorld->getDebugDrawer(), deformableWorld->getDrawFlags());
+				btSoftBodyHelpers::Draw(psb, deformableWorld->getDebugDrawer(), fDrawFlags::Faces);// deformableWorld->getDrawFlags());
             }
         }
     }
@@ -171,6 +195,8 @@ void DeformableRigid::initPhysics()
     btVector3 gravity = btVector3(0, -10, 0);
 	m_dynamicsWorld->setGravity(gravity);
     getDeformableDynamicsWorld()->getWorldInfo().m_gravity = gravity;
+	getDeformableDynamicsWorld()->getWorldInfo().m_sparsesdf.setDefaultVoxelsz(0.25);
+	getDeformableDynamicsWorld()->getWorldInfo().m_sparsesdf.Reset();
     
 //    getDeformableDynamicsWorld()->before_solver_callbacks.push_back(dynamics);
 	m_guiHelper->createPhysicsDebugDrawer(m_dynamicsWorld);
@@ -183,7 +209,7 @@ void DeformableRigid::initPhysics()
 
         btTransform groundTransform;
         groundTransform.setIdentity();
-        groundTransform.setOrigin(btVector3(0, -32, 0));
+        groundTransform.setOrigin(btVector3(0, -42, 0));
         groundTransform.setRotation(btQuaternion(btVector3(1, 0, 0), SIMD_PI * 0.));
         //We can also use DemoApplication::localCreateRigidBody, but for clarity it is provided here:
         btScalar mass(0.);
@@ -206,6 +232,7 @@ void DeformableRigid::initPhysics()
     }
     
     // create a piece of cloth
+    if(1)
     {
         bool onGround = false;
         const btScalar s = 4;
@@ -216,8 +243,8 @@ void DeformableRigid::initPhysics()
                                                          btVector3(-s, h, +s),
                                                          btVector3(+s, h, +s),
 //                                                         3,3,
-                                                          20,20,
-                                                          1 + 2 + 4 + 8, true);
+                                                         20,20,
+                                                         1 + 2 + 4 + 8, true);
 //                                                          0, true);
 
         if (onGround)
@@ -229,32 +256,35 @@ void DeformableRigid::initPhysics()
                                                  2,2,
                                                  0, true);
         
-        psb->getCollisionShape()->setMargin(0.1);
+        psb->getCollisionShape()->setMargin(0.05);
         psb->generateBendingConstraints(2);
         psb->setTotalMass(1);
         psb->m_cfg.kKHR = 1; // collision hardness with kinematic objects
         psb->m_cfg.kCHR = 1; // collision hardness with rigid body
-        psb->m_cfg.kDF = 1;
+        psb->m_cfg.kDF = 2;
         psb->m_cfg.collisions = btSoftBody::fCollision::SDF_RD;
+        psb->m_cfg.collisions |= btSoftBody::fCollision::SDF_RDF;
         getDeformableDynamicsWorld()->addSoftBody(psb);
         
-        btDeformableMassSpringForce* mass_spring = new btDeformableMassSpringForce(2,0.01, false);
+        btDeformableMassSpringForce* mass_spring = new btDeformableMassSpringForce(15,0.5, true);
         getDeformableDynamicsWorld()->addForce(psb, mass_spring);
-        forces.push_back(mass_spring);
+        m_forces.push_back(mass_spring);
         
         btDeformableGravityForce* gravity_force =  new btDeformableGravityForce(gravity);
         getDeformableDynamicsWorld()->addForce(psb, gravity_force);
-        forces.push_back(gravity_force);
+        m_forces.push_back(gravity_force);
         // add a few rigid bodies
-        Ctor_RbUpStack(1);
     }
+    Ctor_RbUpStack(10);
+    getDeformableDynamicsWorld()->setImplicit(false);
+    getDeformableDynamicsWorld()->setLineSearch(false);
 	m_guiHelper->autogenerateGraphicsObjects(m_dynamicsWorld);
 }
 
 void DeformableRigid::exitPhysics()
 {
 	//cleanup in the reverse order of creation/initialization
-
+    removePickingConstraint();
 	//remove the rigidbodies from the dynamics world and delete them
 	int i;
 	for (i = m_dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; i--)
@@ -269,11 +299,12 @@ void DeformableRigid::exitPhysics()
 		delete obj;
 	}
     // delete forces
-    for (int j = 0; j < forces.size(); j++)
+    for (int j = 0; j < m_forces.size(); j++)
     {
-        btDeformableLagrangianForce* force = forces[j];
+        btDeformableLagrangianForce* force = m_forces[j];
         delete force;
     }
+    m_forces.clear();
 	//delete collision shapes
 	for (int j = 0; j < m_collisionShapes.size(); j++)
 	{

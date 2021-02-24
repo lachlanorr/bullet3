@@ -1,9 +1,11 @@
 #ifndef PHYSICS_SERVER_COMMAND_PROCESSOR_H
 #define PHYSICS_SERVER_COMMAND_PROCESSOR_H
 
+#include "LinearMath/btHashMap.h"
 #include "LinearMath/btVector3.h"
 
 #include "PhysicsCommandProcessorInterface.h"
+#include "../Importers/ImportURDFDemo/UrdfParser.h"
 
 struct SharedMemLines
 {
@@ -17,8 +19,11 @@ class PhysicsServerCommandProcessor : public CommandProcessorInterface
 {
 	struct PhysicsServerCommandProcessorInternalData* m_data;
 
-	void resetSimulation();
+	void resetSimulation(int flags = 0);
 	void createThreadPool();
+
+	class btDeformableMultiBodyDynamicsWorld* getDeformableWorld();
+	class btSoftMultiBodyDynamicsWorld* getSoftWorld();
 
 protected:
 	bool processStateLoggingCommand(const struct SharedMemoryCommand& clientCmd, struct SharedMemoryStatus& serverStatusOut, char* bufferServerToClient, int bufferSizeInBytes);
@@ -100,6 +105,7 @@ protected:
 	bool loadMjcf(const char* fileName, char* bufferServerToClient, int bufferSizeInBytes, bool useMultiBody, int flags);
 
 	bool processImportedObjects(const char* fileName, char* bufferServerToClient, int bufferSizeInBytes, bool useMultiBody, int flags, class URDFImporterInterface& u2b);
+	bool processDeformable(const UrdfDeformable& deformable, const btVector3& pos, const btQuaternion& orn, int* bodyUniqueId, char* bufferServerToClient, int bufferSizeInBytes, btScalar scale, bool useSelfCollision);
 
 	bool supportsJointMotor(class btMultiBody* body, int linkIndex);
 
@@ -114,7 +120,7 @@ public:
 
 	void createJointMotors(class btMultiBody* body);
 
-	virtual void createEmptyDynamicsWorld();
+	virtual void createEmptyDynamicsWorld(int flags = 0);
 	virtual void deleteDynamicsWorld();
 
 	virtual bool connect()
@@ -177,6 +183,8 @@ public:
 
 private:
 	void addBodyChangedNotifications();
+	int addUserData(int bodyUniqueId, int linkIndex, int visualShapeIndex, const char* key, const char* valueBytes, int valueLength, int valueType);
+	void addUserData(const btHashMap<btHashString, std::string>& user_data_entries, int bodyUniqueId, int linkIndex = -1, int visualShapeIndex = -1);
 };
 
 #endif  //PHYSICS_SERVER_COMMAND_PROCESSOR_H
