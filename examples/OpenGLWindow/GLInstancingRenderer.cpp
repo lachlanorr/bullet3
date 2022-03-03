@@ -397,6 +397,16 @@ void GLInstancingRenderer::removeAllInstances()
 	m_graphicsInstances.clear();
 	m_data->m_publicGraphicsInstances.exitHandles();
 	m_data->m_publicGraphicsInstances.initHandles();
+
+#if 0
+	//todo: cannot release ALL textures, since some handles are still kept, and it would cause a crash
+	for (int i=0;i<m_data->m_textureHandles.size();i++)
+	{
+		InternalTextureHandle& h = m_data->m_textureHandles[i];
+		glDeleteTextures(1, &h.m_glTexture);
+	}
+	m_data->m_textureHandles.clear();
+#endif
 }
 
 GLInstancingRenderer::~GLInstancingRenderer()
@@ -1510,6 +1520,11 @@ void GLInstancingRenderer::setLightPosition(const double lightPos[3])
 	m_data->m_lightPos[0] = lightPos[0];
 	m_data->m_lightPos[1] = lightPos[1];
 	m_data->m_lightPos[2] = lightPos[2];
+}
+
+void GLInstancingRenderer::setBackgroundColor(const double rgbBackground[3])
+{
+	glClearColor(rgbBackground[0], rgbBackground[1], rgbBackground[2], 1.f);
 }
 
 void GLInstancingRenderer::setProjectiveTextureMatrices(const float viewMatrix[16], const float projectionMatrix[16])

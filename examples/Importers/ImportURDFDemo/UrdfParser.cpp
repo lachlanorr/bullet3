@@ -94,7 +94,8 @@ static void ParseUserData(const XMLElement* element, btHashMap<btHashString,
 			if (!key_attr) {
 				logger->reportError("User data tag must have a key attribute.");
 			}
-			user_data.insert(key_attr, user_data_xml->GetText());
+			const char* text = user_data_xml->GetText();
+			user_data.insert(key_attr, text ? text : "");
 		}
 	}
 }
@@ -1132,6 +1133,7 @@ bool UrdfParser::parseDeformable(UrdfModel& model, tinyxml2::XMLElement* config,
 	if (!i)
 	{
 		logger->reportError("expected an inertial element");
+		return false;
 	}
 	UrdfInertia inertia;
 	if (!parseInertia(inertia, i, logger))
@@ -1288,6 +1290,7 @@ bool UrdfParser::parseJointLimits(UrdfJoint& joint, XMLElement* config, ErrorLog
 	joint.m_velocityLimit = 0.f;
 	joint.m_jointDamping = 0.f;
 	joint.m_jointFriction = 0.f;
+	joint.m_twistLimit = -1;
 
 	if (m_parseSDF)
 	{
@@ -1302,13 +1305,19 @@ bool UrdfParser::parseJointLimits(UrdfJoint& joint, XMLElement* config, ErrorLog
 		{
 			joint.m_upperLimit = urdfLexicalCast<double>(upper_xml->GetText());
 		}
+		
+		XMLElement* twist_xml = config->FirstChildElement("twist");
+		if (twist_xml)
+		{
+			joint.m_twistLimit = urdfLexicalCast<double>(twist_xml->GetText());
+		}
 
 		XMLElement* effort_xml = config->FirstChildElement("effort");
 		if (effort_xml)
 		{
 			joint.m_effortLimit = urdfLexicalCast<double>(effort_xml->GetText());
 		}
-
+		
 		XMLElement* velocity_xml = config->FirstChildElement("velocity");
 		if (velocity_xml)
 		{
@@ -1335,12 +1344,21 @@ bool UrdfParser::parseJointLimits(UrdfJoint& joint, XMLElement* config, ErrorLog
 			joint.m_upperLimit *= m_urdfScaling;
 		}
 
+		
+		const char* twist_str = config->Attribute("twist");
+		if (twist_str)
+		{
+			joint.m_twistLimit = urdfLexicalCast<double>(twist_str);
+		}
+
+
 		// Get joint effort limit
 		const char* effort_str = config->Attribute("effort");
 		if (effort_str)
 		{
 			joint.m_effortLimit = urdfLexicalCast<double>(effort_str);
 		}
+
 
 		// Get joint velocity limit
 		const char* velocity_str = config->Attribute("velocity");
