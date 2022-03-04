@@ -55,6 +55,11 @@ SET(LinearMath_HDRS
 )
 
 ADD_LIBRARY(LinearMath ${LinearMath_SRCS} ${LinearMath_HDRS})
+if(gaen_MINEXT)
+  target_include_directories(LinearMath PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+endif() # gaen_MINEXT
 SET_TARGET_PROPERTIES(LinearMath PROPERTIES VERSION ${BULLET_VERSION})
 SET_TARGET_PROPERTIES(LinearMath PROPERTIES SOVERSION ${BULLET_VERSION})
 

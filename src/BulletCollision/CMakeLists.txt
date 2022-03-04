@@ -254,6 +254,11 @@ SET(BulletCollision_HDRS
 
 
 ADD_LIBRARY(BulletCollision ${BulletCollision_SRCS} ${BulletCollision_HDRS})
+if(gaen_MINEXT)
+  target_include_directories(BulletCollision PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+endif() # gaen_MINEXT
 SET_TARGET_PROPERTIES(BulletCollision PROPERTIES VERSION ${BULLET_VERSION})
 SET_TARGET_PROPERTIES(BulletCollision PROPERTIES SOVERSION ${BULLET_VERSION})
 IF (BUILD_SHARED_LIBS)

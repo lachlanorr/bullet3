@@ -137,6 +137,11 @@ SET(BulletDynamics_HDRS
 
 
 ADD_LIBRARY(BulletDynamics ${BulletDynamics_SRCS} ${BulletDynamics_HDRS})
+if(gaen_MINEXT)
+  target_include_directories(BulletDynamics PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+endif() # gaen_MINEXT
 SET_TARGET_PROPERTIES(BulletDynamics PROPERTIES VERSION ${BULLET_VERSION})
 SET_TARGET_PROPERTIES(BulletDynamics PROPERTIES SOVERSION ${BULLET_VERSION})
 IF (BUILD_SHARED_LIBS)
