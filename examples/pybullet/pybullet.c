@@ -6398,6 +6398,119 @@ static PyObject* pybullet_addUserDebugLine(PyObject* self, PyObject* args, PyObj
 	}
 }
 
+static int extractVertices(PyObject* verticesObj, double* vertices, int maxNumVertices)
+{
+	int numVerticesOut = 0;
+
+	if (verticesObj)
+	{
+		PyObject* seqVerticesObj = PySequence_Fast(verticesObj, "expected a sequence of vertex positions");
+		if (seqVerticesObj)
+		{
+			int numVerticesSrc = PySequence_Size(seqVerticesObj);
+			{
+				int i;
+
+				if (numVerticesSrc > maxNumVertices)
+				{
+					PyErr_SetString(SpamError, "Number of vertices exceeds the maximum.");
+					Py_DECREF(seqVerticesObj);
+					return 0;
+				}
+				for (i = 0; i < numVerticesSrc; i++)
+				{
+					PyObject* vertexObj = PySequence_GetItem(seqVerticesObj, i);
+					double vertex[3];
+					if (pybullet_internalSetVectord(vertexObj, vertex))
+					{
+						if (vertices)
+						{
+							vertices[numVerticesOut * 3 + 0] = vertex[0];
+							vertices[numVerticesOut * 3 + 1] = vertex[1];
+							vertices[numVerticesOut * 3 + 2] = vertex[2];
+						}
+						numVerticesOut++;
+					}
+				}
+			}
+		}
+	}
+	return numVerticesOut;
+}
+
+static PyObject* pybullet_addUserDebugPoints(PyObject* self, PyObject* args, PyObject* keywds)
+{
+	b3SharedMemoryCommandHandle commandHandle;
+	b3SharedMemoryStatusHandle statusHandle;
+	int statusType;
+	int res = 0;
+
+	int parentObjectUniqueId = -1;
+	int parentLinkIndex = -1;
+
+	PyObject* pointPositionsObj = 0;
+	PyObject* pointColorsObj = 0;
+	double pointSize = 1.f;
+	double lifeTime = 0.f;
+	int physicsClientId = 0;
+	int debugItemUniqueId = -1;
+	int replaceItemUniqueId = -1;
+	b3PhysicsClientHandle sm = 0;
+	static char* kwlist[] = {"pointPositions", "pointColorsRGB", "pointSize", "lifeTime", "parentObjectUniqueId", "parentLinkIndex", "replaceItemUniqueId", "physicsClientId", NULL};
+
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "OO|ddiiii", kwlist, &pointPositionsObj, &pointColorsObj, &pointSize, &lifeTime, &parentObjectUniqueId, &parentLinkIndex, &replaceItemUniqueId, &physicsClientId))
+	{
+		return NULL;
+	}
+	sm = getPhysicsClient(physicsClientId);
+	if (sm == 0)
+	{
+		PyErr_SetString(SpamError, "Not connected to physics server.");
+		return NULL;
+	}
+
+	int numPositions = extractVertices(pointPositionsObj, 0, B3_MAX_NUM_VERTICES);
+	if (numPositions == 0) {
+		return NULL;
+	}
+	double* pointPositions = numPositions ? malloc(numPositions * 3 * sizeof(double)) : 0;
+	numPositions = extractVertices(pointPositionsObj, pointPositions, B3_MAX_NUM_VERTICES);
+
+	int numColors = extractVertices(pointColorsObj, 0, B3_MAX_NUM_VERTICES);
+	double* pointColors = numColors ? malloc(numColors * 3 * sizeof(double)) : 0;
+	numColors = extractVertices(pointColorsObj, pointColors, B3_MAX_NUM_VERTICES);
+	if (numColors != numPositions) {
+		PyErr_SetString(SpamError, "numColors must match numPositions.");
+		return NULL;
+	}
+
+	commandHandle = b3InitUserDebugDrawAddPoints3D(sm, pointPositions, pointColors, pointSize, lifeTime, numPositions);
+
+	free(pointPositions);
+	free(pointColors);
+
+	if (parentObjectUniqueId >= 0)
+	{
+		b3UserDebugItemSetParentObject(commandHandle, parentObjectUniqueId, parentLinkIndex);
+	}
+
+	if (replaceItemUniqueId >= 0)
+	{
+		b3UserDebugItemSetReplaceItemUniqueId(commandHandle, replaceItemUniqueId);
+	}
+
+	statusHandle = b3SubmitClientCommandAndWaitStatus(sm, commandHandle);
+	statusType = b3GetStatusType(statusHandle);
+	if (statusType == CMD_USER_DEBUG_DRAW_COMPLETED)
+	{
+		debugItemUniqueId = b3GetDebugItemUniqueId(statusHandle);
+	}
+	{
+		PyObject* item = PyInt_FromLong(debugItemUniqueId);
+		return item;
+	}
+}
+
 static PyObject* pybullet_removeUserDebugItem(PyObject* self, PyObject* args, PyObject* keywds)
 {
 	b3SharedMemoryCommandHandle commandHandle;
@@ -8519,46 +8632,6 @@ static PyObject* pybullet_enableJointForceTorqueSensor(PyObject* self, PyObject*
 	return NULL;
 }
 
-static int extractVertices(PyObject* verticesObj, double* vertices, int maxNumVertices)
-{
-	int numVerticesOut = 0;
-
-	if (verticesObj)
-	{
-		PyObject* seqVerticesObj = PySequence_Fast(verticesObj, "expected a sequence of vertex positions");
-		if (seqVerticesObj)
-		{
-			int numVerticesSrc = PySequence_Size(seqVerticesObj);
-			{
-				int i;
-
-				if (numVerticesSrc > B3_MAX_NUM_VERTICES)
-				{
-					PyErr_SetString(SpamError, "Number of vertices exceeds the maximum.");
-					Py_DECREF(seqVerticesObj);
-					return 0;
-				}
-				for (i = 0; i < numVerticesSrc; i++)
-				{
-					PyObject* vertexObj = PySequence_GetItem(seqVerticesObj, i);
-					double vertex[3];
-					if (pybullet_internalSetVectord(vertexObj, vertex))
-					{
-						if (vertices)
-						{
-							vertices[numVerticesOut * 3 + 0] = vertex[0];
-							vertices[numVerticesOut * 3 + 1] = vertex[1];
-							vertices[numVerticesOut * 3 + 2] = vertex[2];
-						}
-						numVerticesOut++;
-					}
-				}
-			}
-		}
-	}
-	return numVerticesOut;
-}
-
 static int extractUVs(PyObject* uvsObj, double* uvs, int maxNumVertices)
 {
 	int numUVOut = 0;
@@ -9115,6 +9188,64 @@ static PyObject* pybullet_getMeshData(PyObject* self, PyObject* args, PyObject* 
 	PyErr_SetString(SpamError, "getMeshData failed");
 	return NULL;
 }
+
+
+static PyObject* pybullet_getTetraMeshData(PyObject* self, PyObject* args, PyObject* keywds)
+{
+	int bodyUniqueId = -1;
+	b3PhysicsClientHandle sm = 0;
+	b3SharedMemoryCommandHandle command;
+	b3SharedMemoryStatusHandle statusHandle;
+	struct b3TetraMeshData meshData;
+	int statusType;
+	int flags = -1;
+
+	int physicsClientId = 0;
+	static char* kwlist[] = {"bodyUniqueId",  "flags", "physicsClientId", NULL};
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "i|iii", kwlist, &bodyUniqueId,  &flags , &physicsClientId))
+	{
+		return NULL;
+	}
+	sm = getPhysicsClient(physicsClientId);
+	if (sm == 0)
+	{
+		PyErr_SetString(SpamError, "Not connected to physics server.");
+		return NULL;
+	}
+	command = b3GetTetraMeshDataCommandInit(sm, bodyUniqueId);
+	if (flags >= 0)
+	{
+		b3GetTetraMeshDataSetFlags(command, flags);
+	}
+
+	statusHandle = b3SubmitClientCommandAndWaitStatus(sm, command);
+	statusType = b3GetStatusType(statusHandle);
+	if (statusType == CMD_REQUEST_TETRA_MESH_DATA_COMPLETED)
+	{
+		int i;
+		PyObject* pyVertexData;
+		PyObject* pyListMeshData = PyTuple_New(2);
+		b3GetTetraMeshData(sm, &meshData);
+		PyTuple_SetItem(pyListMeshData, 0, PyInt_FromLong(meshData.m_numVertices));
+		pyVertexData = PyTuple_New(meshData.m_numVertices);
+		PyTuple_SetItem(pyListMeshData, 1, pyVertexData);
+
+		for (i = 0; i < meshData.m_numVertices; i++)
+		{
+			PyObject* pyListVertex = PyTuple_New(3);
+			PyTuple_SetItem(pyListVertex, 0, PyFloat_FromDouble(meshData.m_vertices[i].x));
+			PyTuple_SetItem(pyListVertex, 1, PyFloat_FromDouble(meshData.m_vertices[i].y));
+			PyTuple_SetItem(pyListVertex, 2, PyFloat_FromDouble(meshData.m_vertices[i].z));
+			PyTuple_SetItem(pyVertexData, i, pyListVertex);
+		}
+
+		return pyListMeshData;
+	}
+
+	PyErr_SetString(SpamError, "getTetraMeshData failed");
+	return NULL;
+}
+
 
 
 static PyObject* pybullet_resetMeshData(PyObject* self, PyObject* args, PyObject* keywds)
@@ -12571,6 +12702,9 @@ static PyMethodDef SpamMethods[] = {
 	{"getMeshData", (PyCFunction)pybullet_getMeshData, METH_VARARGS | METH_KEYWORDS,
 	 "Get mesh data. Returns vertices etc from the mesh."},
 
+	{"getTetraMeshData", (PyCFunction)pybullet_getTetraMeshData, METH_VARARGS | METH_KEYWORDS,
+	 "Get mesh data. Returns tetra from the mesh."},
+
 	{"resetMeshData", (PyCFunction)pybullet_resetMeshData, METH_VARARGS | METH_KEYWORDS,
 	 "Reset mesh data. Only implemented for deformable bodies."},
 
@@ -12834,6 +12968,10 @@ static PyMethodDef SpamMethods[] = {
 
 	{"addUserDebugLine", (PyCFunction)pybullet_addUserDebugLine, METH_VARARGS | METH_KEYWORDS,
 	 "Add a user debug draw line with lineFrom[3], lineTo[3], lineColorRGB[3], lineWidth, lifeTime. "
+	 "A lifeTime of 0 means permanent until removed. Returns a unique id for the user debug item."},
+
+	{"addUserDebugPoints", (PyCFunction)pybullet_addUserDebugPoints, METH_VARARGS | METH_KEYWORDS,
+	 "Add user debug draw points with pointPositions[3], pointColorsRGB[3], pointSize, lifeTime. "
 	 "A lifeTime of 0 means permanent until removed. Returns a unique id for the user debug item."},
 
 	{"addUserDebugText", (PyCFunction)pybullet_addUserDebugText, METH_VARARGS | METH_KEYWORDS,
@@ -13176,6 +13314,7 @@ initpybullet(void)
 	//PyModule_AddIntConstant(m, "CONSTRAINT_SOLVER_LCP_BLOCK",eConstraintSolverLCP_BLOCK_PGS);
 
 	PyModule_AddIntConstant(m, "RESET_USE_DEFORMABLE_WORLD", RESET_USE_DEFORMABLE_WORLD);
+	PyModule_AddIntConstant(m, "RESET_USE_REDUCED_DEFORMABLE_WORLD", RESET_USE_REDUCED_DEFORMABLE_WORLD);
 	PyModule_AddIntConstant(m, "RESET_USE_DISCRETE_DYNAMICS_WORLD", RESET_USE_DISCRETE_DYNAMICS_WORLD);
 	PyModule_AddIntConstant(m, "RESET_USE_SIMPLE_BROADPHASE", RESET_USE_SIMPLE_BROADPHASE);
 
